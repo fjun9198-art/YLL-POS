@@ -542,6 +542,23 @@ body.light .cash-quick-btn{
   color:#fff !important;
 }
 
+.rawbt-btn{
+  background:linear-gradient(135deg,#0f766e,#14b8a6) !important;
+  color:#fff !important;
+}
+.auto-print-btn{
+  background:linear-gradient(135deg,#334155,#0f172a) !important;
+  color:#fff !important;
+}
+body.light .rawbt-btn{
+  background:linear-gradient(135deg,#0f766e,#14b8a6) !important;
+  color:#fff !important;
+}
+body.light .auto-print-btn{
+  background:linear-gradient(135deg,#334155,#0f172a) !important;
+  color:#fff !important;
+}
+
 </style>
 </head>
 <body>
@@ -602,13 +619,23 @@ body.light .cash-quick-btn{
       <div id="moreMenu" class="moreMenu">
 
   <button class="smallbtn print-btn"
-          onclick="printReceipt()">
-    🧾 打印最后一单
+          onclick="printReceipt(false)">
+    🧾 生成/复制最后一单
+  </button>
+
+  <button class="smallbtn rawbt-btn"
+          onclick="printRawBTLast()">
+    🖨️ RawBT 打印
   </button>
 
   <button class="smallbtn send-btn"
           onclick="sendLastReceipt()">
-    📤 发送收据
+    📤 Telegram 发送
+  </button>
+
+  <button id="autoPrintBtn" class="smallbtn auto-print-btn"
+          onclick="togglePrintMode()">
+    🔁 自动：Telegram
   </button>
 
   <button class="smallbtn report-btn"
@@ -711,6 +738,7 @@ window.onload=function(){
   loadTodayStats();
   syncOfflineOrders();
   updateClock();
+  updateAutoPrintButton();
   setInterval(updateClock,1000);
 };
 
@@ -891,14 +919,14 @@ function checkout(payment,paid=0,change=0){
         cart.forEach(i=>i.orderId=orderId);
         lastCart=JSON.parse(JSON.stringify(cart));
         lastDiscount=Number(discount||0);
-        printReceipt();
+        printReceipt(true);
         cart=[];discount=0;showCart();loadTodayStats();load();
       })
       .catch(function(err){alert("❌ 保存失败："+(err.message||err));});
   });
 }
 
-function printReceipt(){
+function printReceipt(auto=false){
   let now = new Date();
   let date = now.toLocaleDateString("en-GB");
   let time = now.toLocaleTimeString();
@@ -978,9 +1006,75 @@ Payment: ${lastPayment || ""}
   }else{
     alert(text);
   }
+
+  if(auto){
+    runAutoPrint();
+  }
 }
 
-function sendLastReceipt(){if(!lastReceiptText){alert("还没有收据");return} window.open("https://t.me/share/url?url=&text="+encodeURIComponent(lastReceiptText),"_blank")}
+function sendToTelegram(text){
+  window.open("https://t.me/share/url?url=&text="+encodeURIComponent(text),"_blank");
+}
+
+function sendLastReceipt(){
+  if(!lastReceiptText){alert("还没有收据");return}
+  sendToTelegram(lastReceiptText);
+}
+
+function printRawBTLast(){
+  if(!lastReceiptText){
+    printReceipt(false);
+  }
+  if(!lastReceiptText){alert("还没有收据");return}
+  openRawBT(lastReceiptText);
+}
+
+function openRawBT(text){
+  try{
+    const b64 = btoa(unescape(encodeURIComponent(text)));
+    window.location.href = "rawbt:base64," + b64;
+    setTimeout(()=>showToast("🖨️ 已尝试打开 RawBT（安卓手机有效）"),500);
+  }catch(e){
+    alert("RawBT 打印失败：" + e.message);
+  }
+}
+
+function getPrintMode(){
+  return localStorage.getItem("printMode") || "telegram";
+}
+
+function setPrintMode(mode){
+  localStorage.setItem("printMode", mode);
+  updateAutoPrintButton();
+}
+
+function togglePrintMode(){
+  const mode = getPrintMode();
+  const next = mode === "telegram" ? "rawbt" : (mode === "rawbt" ? "off" : "telegram");
+  setPrintMode(next);
+  if(next === "telegram") showToast("自动打印：Telegram 分享（适合 iPad → 安卓手机）");
+  else if(next === "rawbt") showToast("自动打印：RawBT（适合安卓手机直接收银）");
+  else showToast("自动打印：关闭，只复制收据");
+}
+
+function updateAutoPrintButton(){
+  const btn = document.getElementById("autoPrintBtn");
+  if(!btn) return;
+  const mode = getPrintMode();
+  if(mode === "telegram") btn.innerText = "🔁 自动：Telegram";
+  else if(mode === "rawbt") btn.innerText = "🔁 自动：RawBT";
+  else btn.innerText = "🔁 自动：关闭";
+}
+
+function runAutoPrint(){
+  const mode = getPrintMode();
+  if(!lastReceiptText) return;
+  if(mode === "telegram"){
+    sendToTelegram(lastReceiptText);
+  }else if(mode === "rawbt"){
+    openRawBT(lastReceiptText);
+  }
+}
 
 function openReport(){let today=new Date().toISOString().split("T")[0]; document.getElementById("startDate").value=today; document.getElementById("endDate").value=today; openModal("reportBox"); loadReport()}
 function closeReport(){closeModal("reportBox")}
